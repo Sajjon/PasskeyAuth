@@ -4,21 +4,45 @@ A Swift package that provides a simple way to implement passkey authentication i
 
 ## Requirements
 
-- iOS 16.0+ / macOS 13.0+
-- Xcode 14.0+
 - Swift 5.9+
+- Xcode 14.0+
+- iOS 16.0+ / macOS 13.0+
 
 ## Installation
 
-### Swift Package Manager
+You can add PasskeyAuth as a dependency using [Swift Package Manager (SPM)](https://swift.org/package-manager/) either for your own Package or in your Xcode project.
 
-Add PasskeyAuth to your project using Swift Package Manager:
+### SPM in Package
+
+Add PasskeyAuth in `dependencies` of your package description:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/xmtplabs/PasskeyAuth.git", branch: "main")
+]
+```
+
+> [!NOTE]
+> PasskeyAuth has no release yet, so for now you must use `branch: "main"`, but when XMTP Labs have
+> made a release you should specify a version instead.
+
+then add `PasskeyAuth` as a dependency of your target(s):
+
+```swift
+dependencies: [
+	.product(name: "PasskeyAuth", package: "PasskeyAuth")
+]
+```
+
+### SPM in Xcode project
+
+To add PasskeyAuth to your Xcode project:
 
 1. In Xcode, select your project in the Project Navigator
 2. Select your target
 3. Select the "Package Dependencies" tab
 4. Click the "+" button
-5. Enter the repository URL: `https://github.com/ephemeraHQ/PasskeyAuth.git`
+5. Enter the repository URL: `https://github.com/xmtplabs/PasskeyAuth.git`
 6. Click "Add Package"
 
 ## Usage
