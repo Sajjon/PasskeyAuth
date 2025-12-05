@@ -91,20 +91,11 @@ public actor PasskeyAuth {
 
         setAuthenticating(true)
 
-		let urlBase = try makeUrl(endpoint: \.registerChallenge)
-		guard var urlComponents = URLComponents(url: urlBase, resolvingAgainstBaseURL: false) else {
-            throw PasskeyError.invalidURL("Failed to create URL components for registration challenge")
-        }
-
-        urlComponents.queryItems = [
-            URLQueryItem(name: "displayName", value: displayName)
-        ]
-
-        guard let url = urlComponents.url else {
-            throw PasskeyError.invalidURL("Failed to create URL from components")
-        }
-
-		let challengeData = try await getChallengeData(from: url)
+		let challengeData = try await getChallengeData(
+			endpoint: \.registerChallenge,
+			queryItemName: "displayName",
+			queryItemValue: displayName
+		)
 
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
             relyingPartyIdentifier: self.configuration.rpID
@@ -154,9 +145,7 @@ public actor PasskeyAuth {
 
         setAuthenticating(true)
 
-		let url = try makeUrl(endpoint: \.loginChallenge)
-
-		let challengeData = try await getChallengeData(from: url)
+		let challengeData = try await getChallengeData(endpoint: \.loginChallenge)
 
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
             relyingPartyIdentifier: configuration.rpID
@@ -313,14 +302,29 @@ extension PasskeyAuth {
 	}
 	
 	/// Convenience for simple GET requests
-	private func get(from url: URL) async throws -> (Data, HTTPURLResponse) {
+	private func get(
+		endpoint endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
+		queryItems: [URLQueryItem] = []
+	) async throws -> (Data, HTTPURLResponse) {
+		let url = try makeUrl(endpoint: endpointKeyPath, queryItems: queryItems)
 		var request = URLRequest(url: url)
 		request.httpMethod = "GET"
 		return try await performRequest(request)
 	}
 	
-	private func getChallengeData(from url: URL) async throws -> Data {
-		let (data, _) = try await get(from: url)
+	private func getChallengeData(
+		endpoint endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
+		queryItemName name: String,
+		queryItemValue value: String
+	) async throws -> Data {
+		try await getChallengeData(endpoint: endpointKeyPath, queryItems: [.init(name: name, value: value)])
+	}
+	
+	private func getChallengeData(
+		endpoint endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
+		queryItems: [URLQueryItem] = []
+	) async throws -> Data {
+		let (data, _) = try await get(endpoint: endpointKeyPath, queryItems: queryItems)
 		
 		let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 		
@@ -335,11 +339,25 @@ extension PasskeyAuth {
 		return challengeData
 	}
 	
-	private func makeUrl(endpoint keyPath: KeyPath<PasskeyEndpoints, String>) throws -> URL {
-		let endpoint = configuration.endpoints[keyPath: keyPath]
-		guard let url = URL(string: "\(configuration.baseURL)\(endpoint)") else {
+	private func makeUrl(
+		endpoint endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
+		queryItems: [URLQueryItem] = []
+	) throws -> URL {
+		let endpoint = configuration.endpoints[keyPath: endpointKeyPath]
+		guard let urlBase = URL(string: "\(configuration.baseURL)\(endpoint)") else {
 			throw PasskeyError.invalidURL("Failed to create URL for \(endpoint)")
 		}
+		
+		guard var urlComponents = URLComponents(url: urlBase, resolvingAgainstBaseURL: false) else {
+			throw PasskeyError.invalidURL("Failed to create URL components for \(endpoint)")
+		}
+
+		urlComponents.queryItems = queryItems
+
+		guard let url = urlComponents.url else {
+			throw PasskeyError.invalidURL("Failed to create URL from components for \(endpoint)")
+		}
+		
 		return url
 	}
 }
