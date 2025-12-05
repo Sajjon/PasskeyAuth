@@ -212,18 +212,28 @@ public actor PasskeyAuth {
         isAuthenticating = value
     }
 
+	private func post<Response>(
+		decode: Response.Type = Response.self,
+		_ endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
+		body: [String: Any]
+	) async throws -> Response where Response: Decodable {
+		let url = try makeUrl(endpoint: endpointKeyPath)
+
+		var request = URLRequest(url: url)
+		request.httpMethod = "POST"
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+		let (data, _) = try await performRequest(request)
+		return try JSONDecoder().decode(Response.self, from: data)
+	}
+	
     func postRegisterData(
         credentialID: Data,
         attestationObject: Data,
         clientDataJSON: Data
     ) async throws -> PasskeyResponse {
         defer { self.setAuthenticating(false) }
-
-		let url = try makeUrl(endpoint: \.registerPasskey)
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
             "attestationResponse": [
@@ -237,11 +247,7 @@ public actor PasskeyAuth {
             ]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, _) = try await performRequest(request)
-
-        return try JSONDecoder().decode(PasskeyResponse.self, from: data)
+		return try await post(\.registerPasskey, body: body)
     }
 
     func postLoginData(
@@ -251,13 +257,7 @@ public actor PasskeyAuth {
         signature: Data
     ) async throws -> PasskeyResponse {
         defer { self.setAuthenticating(false) }
-
-		let url = try makeUrl(endpoint: \.loginPasskey)
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
+	
         let body: [String: Any] = [
             "authenticationResponse": [
                 "id": credentialID.base64URLEncodedString(),
@@ -272,11 +272,7 @@ public actor PasskeyAuth {
             ]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-		let (data, _) = try await performRequest(request)
-
-        return try JSONDecoder().decode(PasskeyResponse.self, from: data)
+        return try await post(\.loginPasskey, body: body)
     }
 }
 
