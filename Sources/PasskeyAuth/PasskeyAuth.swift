@@ -116,7 +116,7 @@ public actor PasskeyAuth {
             throw PasskeyError.networkError(NSError(domain: "", code: -1))
         }
 
-        if httpResponse.statusCode == 429 {
+		if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
             let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
                 .flatMap { TimeInterval($0) }
             throw PasskeyError.rateLimit(retryAfter: retryAfter)
@@ -146,7 +146,7 @@ public actor PasskeyAuth {
         let request = provider.createCredentialRegistrationRequest(
             challenge: challengeData,
             name: displayName,
-            userID: UUID().uuidString.data(using: .utf8)!
+            userID: Data(UUID().uuidString.utf8)
         )
         request.userVerificationPreference = self.configuration.userVerificationPreference
 
@@ -205,7 +205,7 @@ public actor PasskeyAuth {
             throw PasskeyError.networkError(NSError(domain: "", code: -1))
         }
 
-        if httpResponse.statusCode == 429 {
+        if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
             let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
                 .flatMap { TimeInterval($0) }
             throw PasskeyError.rateLimit(retryAfter: retryAfter)
@@ -317,7 +317,7 @@ public actor PasskeyAuth {
             throw PasskeyError.networkError(NSError(domain: "", code: -1))
         }
 
-        if httpResponse.statusCode == 429 {
+        if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
             let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
                 .flatMap { TimeInterval($0) }
             throw PasskeyError.rateLimit(retryAfter: retryAfter)
@@ -371,7 +371,7 @@ public actor PasskeyAuth {
             throw PasskeyError.networkError(NSError(domain: "", code: -1))
         }
 
-        if httpResponse.statusCode == 429 {
+        if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
             let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
                 .flatMap { TimeInterval($0) }
             throw PasskeyError.rateLimit(retryAfter: retryAfter)
@@ -386,4 +386,8 @@ public actor PasskeyAuth {
 
         return try JSONDecoder().decode(PasskeyResponse.self, from: data)
     }
+}
+
+enum HTTPStatusCode: Int {
+	case tooManyRequests = 429
 }
