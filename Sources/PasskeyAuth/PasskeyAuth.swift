@@ -200,22 +200,6 @@ public actor PasskeyAuth {
     fileprivate func setAuthenticating(_ value: Bool) {
         isAuthenticating = value
     }
-
-	private func post<Response>(
-		decode: Response.Type = Response.self,
-		_ endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
-		body: [String: Any]
-	) async throws -> Response where Response: Decodable {
-		let url = try makeUrl(endpoint: endpointKeyPath)
-
-		var request = URLRequest(url: url)
-		request.httpMethod = "POST"
-		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-		request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-		let (data, _) = try await performRequest(request)
-		return try JSONDecoder().decode(Response.self, from: data)
-	}
 	
     func postRegisterData(
         credentialID: Data,
@@ -337,6 +321,22 @@ extension PasskeyAuth {
 		}
 		
 		return challengeData
+	}
+	
+	private func post<Response>(
+		decode: Response.Type = Response.self,
+		_ endpointKeyPath: KeyPath<PasskeyEndpoints, String>,
+		body: [String: Any]
+	) async throws -> Response where Response: Decodable {
+		let url = try makeUrl(endpoint: endpointKeyPath)
+
+		var request = URLRequest(url: url)
+		request.httpMethod = "POST"
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+		let (data, _) = try await performRequest(request)
+		return try JSONDecoder().decode(Response.self, from: data)
 	}
 	
 	private func makeUrl(
