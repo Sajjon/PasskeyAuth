@@ -84,15 +84,7 @@ public actor PasskeyAuth {
     /// - Throws: Various PasskeyError cases if registration fails
     public func registerPasskey(displayName: String) async throws -> (
         ASAuthorizationPlatformPublicKeyCredentialRegistration, PasskeyResponse) {
-        try checkRateLimit()
-
-        guard let presentationContextProvider = presentationContextProvider else {
-            throw PasskeyError.configurationError("Presentation context provider not set")
-        }
-
-        guard !isAuthenticating else {
-            throw PasskeyError.authenticationInProgress
-        }
+		let presentationContextProvider = try prepareAuthentication()
 
         defer { self.setAuthenticating(false) }
 
@@ -181,15 +173,7 @@ public actor PasskeyAuth {
     /// - Throws: Various PasskeyError cases if login fails
     public func loginWithPasskey() async throws -> (
         ASAuthorizationPlatformPublicKeyCredentialAssertion, PasskeyResponse) {
-        try checkRateLimit()
-
-        guard let presentationContextProvider = presentationContextProvider else {
-            throw PasskeyError.configurationError("Presentation context provider not set")
-        }
-
-        guard !isAuthenticating else {
-            throw PasskeyError.authenticationInProgress
-        }
+        let presentationContextProvider = try prepareAuthentication()
 
         defer { self.setAuthenticating(false) }
 
@@ -386,6 +370,23 @@ public actor PasskeyAuth {
 
         return try JSONDecoder().decode(PasskeyResponse.self, from: data)
     }
+}
+
+// MARK: Private Methods
+extension PasskeyAuth {
+	/// Performs common preflight checks, such as rate limit and wether we are already authenticating.
+	/// Returns the presentationContextProvider and a cleanup closure you should call in a `defer`.
+	private func prepareAuthentication() throws -> PasskeyPresentationContextProvider {
+		try checkRateLimit()
+		guard let presentationContextProvider = presentationContextProvider else {
+			throw PasskeyError.configurationError("Presentation context provider not set")
+		}
+		guard !isAuthenticating else {
+			throw PasskeyError.authenticationInProgress
+		}
+ 
+		return presentationContextProvider
+	}
 }
 
 enum HTTPStatusCode: Int {
