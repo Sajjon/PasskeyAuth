@@ -102,34 +102,7 @@ public actor PasskeyAuth {
             throw PasskeyError.invalidURL("Failed to create URL from components")
         }
 
-        let (data, response) = try await session.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PasskeyError.networkError(NSError(domain: "", code: -1))
-        }
-
-		if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
-                .flatMap { TimeInterval($0) }
-            throw PasskeyError.rateLimit(retryAfter: retryAfter)
-        }
-
-        if !(200...299).contains(httpResponse.statusCode) {
-            throw PasskeyError.serverError(
-                statusCode: httpResponse.statusCode,
-                message: String(data: data, encoding: .utf8)
-            )
-        }
-
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let challengeB64 = json?["challenge"] as? String else {
-            throw PasskeyError.invalidChallenge("Challenge not found in response")
-        }
-
-        guard let challengeData = challengeB64.base64URLDecoded() else {
-            throw PasskeyError.invalidChallenge("Failed to decode challenge")
-        }
+		let challengeData = try await getChallengeData(from: url)
 
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
             relyingPartyIdentifier: self.configuration.rpID
@@ -183,34 +156,7 @@ public actor PasskeyAuth {
             throw PasskeyError.invalidURL("Failed to create URL for login challenge")
         }
 
-        let (data, response) = try await session.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PasskeyError.networkError(NSError(domain: "", code: -1))
-        }
-
-        if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
-                .flatMap { TimeInterval($0) }
-            throw PasskeyError.rateLimit(retryAfter: retryAfter)
-        }
-
-        if !(200...299).contains(httpResponse.statusCode) {
-            throw PasskeyError.serverError(
-                statusCode: httpResponse.statusCode,
-                message: String(data: data, encoding: .utf8)
-            )
-        }
-
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let challengeB64 = json?["challenge"] as? String else {
-            throw PasskeyError.invalidChallenge("Challenge not found in response")
-        }
-
-        guard let challengeData = challengeB64.base64URLDecoded() else {
-            throw PasskeyError.invalidChallenge("Failed to decode challenge")
-        }
+		let challengeData = try await getChallengeData(from: url)
 
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
             relyingPartyIdentifier: configuration.rpID
@@ -295,24 +241,7 @@ public actor PasskeyAuth {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PasskeyError.networkError(NSError(domain: "", code: -1))
-        }
-
-        if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
-                .flatMap { TimeInterval($0) }
-            throw PasskeyError.rateLimit(retryAfter: retryAfter)
-        }
-
-        if !(200...299).contains(httpResponse.statusCode) {
-            throw PasskeyError.serverError(
-                statusCode: httpResponse.statusCode,
-                message: String(data: data, encoding: .utf8)
-            )
-        }
+        let (data, _) = try await performRequest(request)
 
         return try JSONDecoder().decode(PasskeyResponse.self, from: data)
     }
@@ -349,24 +278,7 @@ public actor PasskeyAuth {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PasskeyError.networkError(NSError(domain: "", code: -1))
-        }
-
-        if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
-                .flatMap { TimeInterval($0) }
-            throw PasskeyError.rateLimit(retryAfter: retryAfter)
-        }
-
-        if !(200...299).contains(httpResponse.statusCode) {
-            throw PasskeyError.serverError(
-                statusCode: httpResponse.statusCode,
-                message: String(data: data, encoding: .utf8)
-            )
-        }
+		let (data, _) = try await performRequest(request)
 
         return try JSONDecoder().decode(PasskeyResponse.self, from: data)
     }
@@ -386,6 +298,49 @@ extension PasskeyAuth {
 		}
  
 		return presentationContextProvider
+	}
+	
+	/// Performs a URLRequest and enforces shared HTTP handling (status codes, rate limiting, decoding safety)
+	private func performRequest(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+		let (data, response) = try await session.data(for: request)
+		guard let httpResponse = response as? HTTPURLResponse else {
+			throw PasskeyError.networkError(NSError(domain: "", code: -1))
+		}
+		if httpResponse.statusCode == HTTPStatusCode.tooManyRequests.rawValue {
+			let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+				.flatMap { TimeInterval($0) }
+			throw PasskeyError.rateLimit(retryAfter: retryAfter)
+		}
+		guard (200...299).contains(httpResponse.statusCode) else {
+			throw PasskeyError.serverError(
+				statusCode: httpResponse.statusCode,
+				message: String(data: data, encoding: .utf8)
+			)
+		}
+		return (data, httpResponse)
+	}
+	
+	/// Convenience for simple GET requests
+	private func get(from url: URL) async throws -> (Data, HTTPURLResponse) {
+		var request = URLRequest(url: url)
+		request.httpMethod = "GET"
+		return try await performRequest(request)
+	}
+	
+	private func getChallengeData(from url: URL) async throws -> Data {
+		let (data, _) = try await get(from: url)
+		
+		let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+		
+		guard let challengeB64 = json?["challenge"] as? String else {
+			throw PasskeyError.invalidChallenge("Challenge not found in response")
+		}
+		
+		guard let challengeData = challengeB64.base64URLDecoded() else {
+			throw PasskeyError.invalidChallenge("Failed to decode challenge")
+		}
+		
+		return challengeData
 	}
 }
 
