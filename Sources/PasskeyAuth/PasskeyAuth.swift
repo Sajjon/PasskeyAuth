@@ -83,14 +83,16 @@ public actor PasskeyAuth {
     /// - Returns: A PasskeyResponse containing the registration result
     /// - Throws: Various PasskeyError cases if registration fails
     public func registerPasskey(displayName: String) async throws -> (
-        ASAuthorizationPlatformPublicKeyCredentialRegistration, PasskeyResponse) {
+        ASAuthorizationPlatformPublicKeyCredentialRegistration, PasskeyResponse
+	) {
 		let presentationContextProvider = try prepareAuthentication()
 
         defer { self.setAuthenticating(false) }
 
         setAuthenticating(true)
 
-        guard var urlComponents = URLComponents(string: "\(configuration.baseURL)\(configuration.endpoints.registerChallenge)") else {
+		let urlBase = try makeUrl(endpoint: \.registerChallenge)
+		guard var urlComponents = URLComponents(url: urlBase, resolvingAgainstBaseURL: false) else {
             throw PasskeyError.invalidURL("Failed to create URL components for registration challenge")
         }
 
@@ -152,9 +154,7 @@ public actor PasskeyAuth {
 
         setAuthenticating(true)
 
-        guard let url = URL(string: "\(configuration.baseURL)\(configuration.endpoints.loginChallenge)") else {
-            throw PasskeyError.invalidURL("Failed to create URL for login challenge")
-        }
+		let url = try makeUrl(endpoint: \.loginChallenge)
 
 		let challengeData = try await getChallengeData(from: url)
 
@@ -219,9 +219,7 @@ public actor PasskeyAuth {
     ) async throws -> PasskeyResponse {
         defer { self.setAuthenticating(false) }
 
-        guard let url = URL(string: "\(configuration.baseURL)\(configuration.endpoints.registerPasskey)") else {
-            throw PasskeyError.invalidURL("Failed to create URL for passkey registration")
-        }
+		let url = try makeUrl(endpoint: \.registerPasskey)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -254,9 +252,7 @@ public actor PasskeyAuth {
     ) async throws -> PasskeyResponse {
         defer { self.setAuthenticating(false) }
 
-        guard let url = URL(string: "\(configuration.baseURL)\(configuration.endpoints.loginPasskey)") else {
-            throw PasskeyError.invalidURL("Failed to create URL for passkey login")
-        }
+		let url = try makeUrl(endpoint: \.loginPasskey)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -341,6 +337,14 @@ extension PasskeyAuth {
 		}
 		
 		return challengeData
+	}
+	
+	private func makeUrl(endpoint keyPath: KeyPath<PasskeyEndpoints, String>) throws -> URL {
+		let endpoint = configuration.endpoints[keyPath: keyPath]
+		guard let url = URL(string: "\(configuration.baseURL)\(endpoint)") else {
+			throw PasskeyError.invalidURL("Failed to create URL for \(endpoint)")
+		}
+		return url
 	}
 }
 
